@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PUBLIC_API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - romantsy-network
+
+  backend:
+    build:
+      context: ./python-prototypes
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - romantsy-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - romantsy-network
+    restart: unless-stopped
+
+  # Optional: Database for production data storage
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=romantsy
+      - POSTGRES_USER=romantsy
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - romantsy-network
+    restart: unless-stopped
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - romantsy-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  romantsy-network:
+    driver: bridge
